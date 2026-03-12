@@ -1,0 +1,26 @@
+# prometheus.yml — Memory-optimised for edge device
+# Key tuning:
+#   retention.time=6h    → less RAM used for historical data
+#   scrape_interval=15s  → less write pressure than default 1min
+#   WAL compression      → enabled via docker-compose CLI flags
+
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+  scrape_timeout:      10s
+
+scrape_configs:
+
+  # Prometheus self-monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+    scrape_interval: 30s
+
+  # Python sensor service
+  - job_name: "sensor"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["sensor-service:8000"]
+    scrape_interval: 15s
+    scrape_timeout: 10s

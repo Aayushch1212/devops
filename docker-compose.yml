@@ -1,0 +1,90 @@
+# docker-compose.yml — Optimised Observability Stack
+# Memory budget (target < 300 MB total):
+#   sensor-service  ~  25 MB
+#   prometheus      ~  80 MB
+#   grafana         ~ 120 MB
+#   ─────────────────────────
+#   TOTAL           ~ 225 MB  ✓ (75 MB headroom)
+
+version: "3.9"
+
+networks:
+  observability:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data:
+
+services:
+
+  # ── Python Sensor Service ──────────────────────────────────────────────────
+  sensor-service:
+    build: .
+    container_name: sensor-service
+    restart: unless-stopped
+    networks:
+      - observability
+    ports:
+      - "8000:8000"
+    mem_limit: 40m
+    memswap_limit: 40m
+    cpus: "0.25"
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ── Prometheus ─────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: prometheus
+    restart: unless-stopped
+    networks:
+      - observability
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=6h"
+      - "--storage.tsdb.wal-compression"
+      - "--query.max-concurrency=2"
+      - "--web.enable-lifecycle"
+    mem_limit: 100m
+    memswap_limit: 100m
+    cpus: "0.30"
+    depends_on:
+      sensor-service:
+        condition: service_healthy
+
+  # ── Grafana ────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: grafana
+    restart: unless-stopped
+    networks:
+      - observability
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: edge-robot-2024
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_PLUGINS_PREINSTALL: ""
+      GF_ALERTING_ENABLED: "false"
+      GF_UNIFIED_ALERTING_ENABLED: "false"
+    mem_limit: 150m
+    memswap_limit: 150m
+    cpus: "0.20"
+    depends_on:
+      - prometheus
