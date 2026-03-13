@@ -165,11 +165,4 @@ GF_ANALYTICS_REPORTING_ENABLED: "false"
 
 ---
 
-## One More Week — Improvement
 
-Deploy **Alertmanager** (~15 MB RAM) alongside Prometheus with alert rules:
-- Fire if CPU spike p95 > 0.4s sustained for 2 minutes
-- Fire if event failure rate > 1/min
-- Route alerts to Slack webhook for on-call notification
-
-This converts the stack from passive observation to active incident detection — critical for an autonomous edge device with no one watching a dashboard 24/7.
