@@ -33,9 +33,9 @@ docker stats --no-stream
 | Service | URL | Credentials |
 |---------|-----|-------------|
 | Grafana Dashboard | http://localhost:3000 | admin / edge-robot-2024 |
-| Prometheus UI | http://localhost:9090 |  |
-| Sensor /metrics | http://localhost:8000/metrics |  |
-| Sensor /health | http://localhost:8000/health |  |
+| Prometheus UI | http://localhost:9090 | — |
+| Sensor /metrics | http://localhost:8000/metrics | — |
+| Sensor /health | http://localhost:8000/health | — |
 
 ---
 
@@ -61,9 +61,11 @@ docker stats --no-stream
 for _ in range(2000000):
     pass
 ```
-Running 2 million iterations on every single Prometheus scrape (every 5s) pegged the CPU at ~100% continuously.
+Running 2 million iterations on every single Prometheus scrape pegged the CPU at ~100% continuously.
 
 **Fix:** Removed entirely. Moved all computation to a background thread with `time.sleep(1)` between readings. CPU dropped from ~100% to <5%.
+
+---
 
 ### Bug 2 — Memory Leak (CRITICAL)
 **Original:**
@@ -73,12 +75,16 @@ temp_data = data_blob * random.randint(1, 3)
 ```
 Allocating 5–15 MB of string data on every scrape request, never freed. Over time this caused the container to OOM crash.
 
-**Fix:** Removed `data_blob` entirely. Replaced with `deque(maxlen=60)` for a bounded sliding window of sensor readings — constant memory at ~1 KB regardless of uptime.
+**Fix:** Removed `data_blob` entirely. Replaced with `deque(maxlen=60)` for a bounded sliding window — constant memory at ~1 KB regardless of uptime.
+
+---
 
 ### Bug 3 — Scrape Delays (SCRAPE FAILURES)
-**Original:** All computation (CPU loop + memory allocation) happened inside the `/metrics` HTTP handler, blocking the response for seconds.
+**Original:** All computation happened inside the `/metrics` HTTP handler, blocking the response for several seconds and causing Prometheus scrape timeouts.
 
-**Fix:** All sensor work now runs in a background thread. The `/metrics` handler only serializes the pre-computed Prometheus registry — typically completing in under 5ms.
+**Fix:** All sensor work now runs in a background thread. The `/metrics` handler only serializes the pre-computed Prometheus registry — completing in under 5ms.
+
+---
 
 ### Bug 4 — Missing Custom Metric
 **Original:** No histogram or meaningful distribution metric.
@@ -108,14 +114,17 @@ rate(sensor_cpu_spike_duration_seconds_count[1m]) * 60
 
 ## Memory Budget
 
-| Component | RAM Limit | Actual RSS |
-|-----------|-----------|------------|
-| sensor-service | 40 MB | ~14 MB |
-| prometheus | 100 MB | ~26 MB |
-| grafana | 150 MB | ~82 MB |
-| **TOTAL** | **290 MB** | **~122 MB** |
+Measured after 22 hours of continuous operation:
 
-Total actual usage is ~122 MB — well under the 300 MB budget.
+| Component | RAM Limit | Actual RSS (22h) |
+|-----------|-----------|------------------|
+| sensor-service | 40 MB | ~24.5 MB |
+| prometheus | 100 MB | ~65.9 MB |
+| grafana | 150 MB | ~97.9 MB |
+| **TOTAL** | **290 MB** | **~188 MB** |
+
+Total actual usage ~188 MB after 22 hours — 37% under the 300 MB budget.
+All containers remain within their individual hard limits at sustained load.
 
 ---
 
@@ -125,16 +134,18 @@ Total actual usage is ~122 MB — well under the 300 MB budget.
 --storage.tsdb.retention.time=6h   # short retention = less RAM
 --storage.tsdb.wal-compression     # compress WAL segments
 --query.max-concurrency=2          # limit parallel queries
-scrape_interval: 15s               # reduced from default 1min
+scrape_interval: 15s               # balanced interval for edge devices
 ```
+
+---
 
 ## Grafana Memory Savings
 
 ```yaml
-GF_ALERTING_ENABLED: "false"              # saves ~30 MB
+GF_ALERTING_ENABLED: "false"
 GF_UNIFIED_ALERTING_ENABLED: "false"
-GF_PLUGINS_PREINSTALL: ""                 # no bundled plugin preload
-GF_ANALYTICS_REPORTING_ENABLED: "false"  # no telemetry goroutines
+GF_PLUGINS_PREINSTALL: ""
+GF_ANALYTICS_REPORTING_ENABLED: "false"
 ```
 
 ---
@@ -142,15 +153,15 @@ GF_ANALYTICS_REPORTING_ENABLED: "false"  # no telemetry goroutines
 ## Design Choices
 
 ### Why Prometheus over VictoriaMetrics?
-- Native Grafana datasource — no extra relay container needed
-- WAL compression + 6h retention keeps RSS under 80 MB
+- Native Grafana datasource — no extra relay container needed, saves ~15 MB RAM
+- WAL compression + 6h retention keeps RSS under 100 MB even after 22h uptime
 - Fewer than 100 active time series — VictoriaMetrics columnar format offers no advantage at this scale
-- Well-understood failure modes, easier to debug on headless edge device
+- Well-understood failure modes, easier to debug on a headless edge device
 
 ### Why Grafana over static dashboard?
-- Native PromQL histogram quantile visualization for CPU spike metric
-- Threshold markers, zoom, time range selection
-- Kept under 120 MB by disabling alerting and analytics engines
+- Native PromQL histogram quantile visualization for the custom CPU spike metric
+- Threshold markers, zoom, and time range selection
+- Kept under 100 MB by disabling alerting and analytics engines via environment variables
 
 ---
 
@@ -161,4 +172,4 @@ Deploy **Alertmanager** (~15 MB RAM) alongside Prometheus with alert rules:
 - Fire if event failure rate > 1/min
 - Route alerts to Slack webhook for on-call notification
 
-This converts the stack from passive observation to active incident detection.
+This converts the stack from passive observation to active incident detection — critical for an autonomous edge device with no one watching a dashboard 24/7.
