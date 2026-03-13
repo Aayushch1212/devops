@@ -8,7 +8,7 @@
 
 ## Video Walkthrough
 
-> [Add your Loom / Google Drive link here]
+> [https://www.loom.com/share/41b11843615c41c5964e9b1155733101]
 
 ---
 
