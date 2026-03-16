@@ -1,12 +1,4 @@
-"""
-Fixed Python Sensor Service for Edge Computing Robot Module
 
-Bugs fixed from original:
-1. CPU spike: removed busy-loop (for _ in range(2000000)) from /metrics handler
-2. Memory leak: removed data_blob allocation on every scrape
-3. Scrape delays: sensor readings now run in background thread, not in HTTP handler
-4. Added custom histogram metric: sensor_cpu_spike_duration_seconds
-"""
 
 import time
 import random
@@ -29,19 +21,19 @@ log = logging.getLogger(__name__)
 
 REGISTRY = CollectorRegistry()
 
-# Original metrics
+
 REQUEST_COUNT = Counter("sensor_requests_total", "Total sensor requests", registry=REGISTRY)
 CPU_SPIKE = Gauge("sensor_cpu_spike", "Simulated CPU spike state", registry=REGISTRY)
 PROCESS_LATENCY = Histogram("sensor_processing_latency_seconds", "Processing time", registry=REGISTRY)
 
-# Dashboard metrics
+
 sensor_temperature = Gauge("sensor_temperature_celsius", "Temperature reading", registry=REGISTRY)
 sensor_humidity = Gauge("sensor_humidity_percent", "Humidity reading", registry=REGISTRY)
 sensor_vibration = Gauge("sensor_vibration_ms2", "Vibration in m/s²", registry=REGISTRY)
 events_processed = Counter("sensor_events_processed_total", "Total events processed", registry=REGISTRY)
 events_failed = Counter("sensor_events_failed_total", "Total failed events", registry=REGISTRY)
 
-# Custom metric: CPU spike duration histogram
+
 cpu_spike_duration = Histogram(
     "sensor_cpu_spike_duration_seconds",
     "Duration of CPU spike events in seconds",
@@ -49,7 +41,7 @@ cpu_spike_duration = Histogram(
     registry=REGISTRY,
 )
 
-# BUG FIX: bounded deque instead of unbounded list
+
 WINDOW = 60
 recent_temps: deque = deque(maxlen=WINDOW)
 _lock = threading.Lock()
