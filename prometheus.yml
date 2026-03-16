@@ -1,8 +1,4 @@
-# prometheus.yml — Memory-optimised for edge device
-# Key tuning:
-#   retention.time=6h    → less RAM used for historical data
-#   scrape_interval=15s  → less write pressure than default 1min
-#   WAL compression      → enabled via docker-compose CLI flags
+
 
 global:
   scrape_interval:     15s
