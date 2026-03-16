@@ -1,10 +1,4 @@
-# docker-compose.yml — Optimised Observability Stack
-# Memory budget (target < 300 MB total):
-#   sensor-service  ~  25 MB
-#   prometheus      ~  80 MB
-#   grafana         ~ 120 MB
-#   ─────────────────────────
-#   TOTAL           ~ 225 MB  ✓ (75 MB headroom)
+
 
 version: "3.9"
 
