@@ -1,4 +1,4 @@
-# DevOps Assignment — 10xConstruction
+# DevOps Assignment 
 
 Platform: 2-core 2GHz, 500MB RAM, Docker
 Goal: keep the whole stack under 300MB
